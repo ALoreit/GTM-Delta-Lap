@@ -6,17 +6,18 @@ Kleines Backend für die DACH-B2B-SaaS-Abläufe aus dem Architekturkonzept. Es i
 
 Die Extension ist absichtlich **kein Apollo-Klon auf technischer Ebene**: Sie liest keine Profilfelder aus dem DOM, kopiert keine LinkedIn-Seitendaten und verwendet keine LinkedIn-Cookies. Nach einem ausdrücklichen Klick übernimmt sie höchstens die URL des aktiven Tabs. Name, Rolle, E-Mail und Telefon werden von der Nutzerin/dem Nutzer selbst eingetragen und vor dem Speichern geprüft. Die Daten landen mit der Profil-URL als Herkunft in der eigenen Datenbank.
 
-Das passt zur LinkedIn User Agreement: diese untersagt nicht autorisierte Browser-Plugins/andere Methoden zum Scrapen oder Kopieren von Profilen und Dienstdaten sowie nicht autorisierte Automatisierung für Kontakt- und Social-Aktionen ([LinkedIn User Agreement](https://www.linkedin.com/legal/user-agreement)). LinkedIn-API-Zugriff auf Member-Daten erfordert passende OAuth-Berechtigungen; viele Berechtigungen und Partnerprogramme müssen ausdrücklich freigeschaltet werden ([LinkedIn API access](https://learn.microsoft.com/en-us/linkedin/shared/authentication/getting-access)). Apollo beschreibt seine Extension als Zugang zu Apollo-Daten und Prospektionsfunktionen in LinkedIn; das erklärt die Produktfunktion, belegt aber nicht, dass eine beliebige Drittanbieter-Extension dieselbe Zugriffsmethode oder Berechtigung hat ([Apollo Extension Overview](https://knowledge.apollo.io/hc/en-us/articles/4409226637453-Apollo-Chrome-Extension-Overview)).
+Das passt zur LinkedIn User Agreement: diese untersagt nicht autorisierte Browser-Plugins/andere Methoden zum Scrapen oder Kopieren von Profilen und Dienstdaten sowie nicht autorisierte Automatisierung für Kontakt- und Social-Aktionen ([LinkedIn User Agreement](https://www.linkedin.com/legal/user-agreement)). LinkedIn-API-Zugriff auf Member-Daten erfordert passende OAuth-Berechtigungen; viele Berechtigungen und Partnerprogramme müssen ausdrücklich freigeschaltet werden ([LinkedIn API access](https://learn.microsoft.com/en-us/linkedin/shared/authentication/getting-access)). Apollo beschreibt seine Extension als Zugang zu Apollo-Daten und Prospektionsfunktionen in LinkedIn; das belegt nicht, dass eine beliebige Drittanbieter-Extension dieselbe Zugriffsmethode oder Berechtigung hat ([Apollo Extension Overview](https://knowledge.apollo.io/hc/en-us/articles/4409226637453-Apollo-Chrome-Extension-Overview)).
 
-Wenn GTM Delta Lap für euren Anwendungsfall von LinkedIn eine API-/Partnerfreigabe erhält, kann dafür ein OAuth-Provider-Adapter ergänzt werden. Bis dahin bietet diese Extension manuelle URL-Übernahme und Dateneingabe. Sie versendet keine Nachrichten.
+Wenn GTM Delta Lap für euren Anwendungsfall eine LinkedIn-API-/Partnerfreigabe erhält, kann dafür ein OAuth-Provider-Adapter ergänzt werden. Bis dahin bietet diese Extension manuelle URL-Übernahme und Dateneingabe. Sie versendet keine Nachrichten.
 
 ### Extension lokal laden
 
 1. API starten und erreichbar halten unter `http://127.0.0.1:8000`.
-2. In Chrome `chrome://extensions` öffnen und den Entwicklermodus einschalten.
+2. In Chrome `chrome://extensions` öffnen und Entwicklermodus einschalten.
 3. „Entpackte Erweiterung laden“ wählen und den Ordner `extension/` auswählen.
-4. LinkedIn-Profil selbst öffnen, Extension anklicken, „Aktive LinkedIn-Profil-URL übernehmen“ drücken.
-5. Account/Kontaktfelder selbst prüfen und ergänzen, dann ausdrücklich speichern.
+4. Die angezeigte Extension-ID als `CHROME_EXTENSION_ORIGIN=chrome-extension://<extension-id>` in `.env` eintragen und die API neu starten. CORS wird nur für diesen exakten Ursprung geöffnet.
+5. LinkedIn-Profil selbst öffnen, Extension anklicken, „Aktive LinkedIn-Profil-URL übernehmen“ drücken.
+6. Account/Kontaktfelder selbst prüfen und ergänzen, dann ausdrücklich speichern.
 
 Die Extension hat `activeTab` und Host-Zugriff nur auf den lokalen GTM-Backend-Port. Sie führt auf LinkedIn kein Content-Script aus. Für automatische Profilfeld-Extraktion ist sie bewusst nicht ausgelegt.
 
@@ -27,7 +28,7 @@ Die Extension hat `activeTab` und Host-Zugriff nur auf den lokalen GTM-Backend-P
 - Telefon-Aufgaben bleiben manuell und erfordern Einzelfallprüfung; der Code entscheidet keine mutmaßliche Einwilligung.
 - Recherche-Signale kommen aus Team-Eingaben oder autorisierten Providern. Es wird keine Website oder Plattform automatisch gecrawlt.
 - Fakten und Schlussfolgerungen, Quellen-URL, Beobachtungsdatum und Vertrauensgrad sind getrennt.
-- Es ist derzeit kein LLM eingebunden. Content-Entwürfe sind ein Quellen-gebundenes Textgerüst aus vom Nutzer gelieferten Aussagen, kein freier KI-Fakten-Generator.
+- Es ist derzeit kein LLM eingebunden. Content-Entwürfe sind ein quellengebundenes Textgerüst aus vom Nutzer gelieferten Aussagen, kein freier KI-Fakten-Generator.
 
 Das sind technische Schutzvorkehrungen, keine Rechtsberatung. UWG-/Datenschutzprüfung und Anpassung an den konkreten Prozess bleiben erforderlich.
 

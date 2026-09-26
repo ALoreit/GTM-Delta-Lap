@@ -1,5 +1,6 @@
 const form = document.querySelector("#capture-form");
 const button = document.querySelector("#submit");
+const useTabButton = document.querySelector("#use-tab");
 const statusBox = document.querySelector("#status");
 const API = "http://127.0.0.1:8000";
 
@@ -17,6 +18,20 @@ function isLinkedInProfile(value) {
     return false;
   }
 }
+
+useTabButton.addEventListener("click", async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url || !isLinkedInProfile(tab.url)) {
+      setStatus("Der aktive Tab scheint kein individuelles LinkedIn-Profil zu sein.", "error");
+      return;
+    }
+    form.elements.linkedin_url.value = tab.url;
+    setStatus("URL übernommen. Bitte alle übrigen Angaben selbst prüfen/eintragen.", "success");
+  } catch {
+    setStatus("Tab-URL konnte nicht übernommen werden. Bitte manuell einfügen.", "error");
+  }
+});
 
 async function postJson(path, body) {
   const response = await fetch(`${API}${path}`, {

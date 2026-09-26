@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 from langgraph.graph import END, START, StateGraph
 try:
     from langgraph.checkpoint.memory import InMemorySaver
-except ImportError:  # LangGraph versions before the InMemorySaver alias
+except ImportError:
     from langgraph.checkpoint.memory import MemorySaver as InMemorySaver
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
@@ -67,17 +67,17 @@ def _dt(value: Any) -> datetime:
     return result.replace(tzinfo=timezone.utc) if result.tzinfo is None else result
 
 
-def _ids(contact: Contact) -> set[str]:
-    values = set()
+def _identifiers(contact: Contact) -> set[str]:
+    result = set()
     if contact.email:
-        values.add(contact.email.strip().casefold())
+        result.add(contact.email.strip().casefold())
     if contact.phone:
         digits = re.sub(r"\D", "", contact.phone)
         if digits:
-            values.add(digits)
+            result.add(digits)
     if contact.linkedin_url:
-        values.add(contact.linkedin_url.strip().rstrip("/").casefold())
-    return values
+        result.add(contact.linkedin_url.strip().rstrip("/").casefold())
+    return result
 
 
 def _audit(session, event: str, kind: str, entity_id: str, payload: dict[str, Any]) -> None:
@@ -102,11 +102,7 @@ def build_graphs(session_factory: sessionmaker, settings: Settings, checkpointer
             reasons.append("Dringlichkeit im Anfragewortlaut.")
         if len(text.split()) >= 25:
             reasons.append("Ausreichend Kontext für eine Qualifizierung.")
-        return {
-            "submission": data,
-            "qualification_score": min(100, score),
-            "qualification_reason": " ".join(reasons),
-        }
+        return {"submission": data, "qualification_score": min(100, score), "qualification_reason": " ".join(reasons)}
 
     def inbound_persist(state: InboundState) -> dict[str, Any]:
         data = state["submission"]
@@ -142,7 +138,7 @@ def build_graphs(session_factory: sessionmaker, settings: Settings, checkpointer
             return result
 
     def research_score(state: ResearchState) -> dict[str, Any]:
-        account = state["account"]
+        account = dict(state["account"])
         account["domain"] = _domain(account["domain"])
         return {"account": account, "score": score_account(industry=account.get("industry"), employee_count=account.get("employee_count"), signals=account.get("signals", []), target_industries=settings.target_industries, min_employees=settings.min_employees, max_employees=settings.max_employees, signal_max_age_days=settings.signal_max_age_days)}
 
@@ -181,7 +177,7 @@ def build_graphs(session_factory: sessionmaker, settings: Settings, checkpointer
             contact = db.get(Contact, data["contact_id"])
             if contact is None:
                 return {"outcome": "blocked", "gate": {"allowed": False, "status": "blocked", "reason": "Contact not found."}}
-            identifiers = _ids(contact)
+            identifiers = _identifiers(contact)
             suppressed = bool(identifiers and db.scalar(select(Suppression.id).where(Suppression.identifier_normalized.in_(identifiers)).limit(1)))
             consent = bool(contact.email_normalized and db.scalar(select(Permission.id).where(Permission.contact_id == contact.id, Permission.channel == "email", Permission.purpose == "marketing", Permission.status == "granted", Permission.revoked_at.is_(None)).limit(1)))
             decision = evaluate_outreach_policy(channel=data["channel"], suppressed=suppressed, has_email=bool(contact.email), has_phone=bool(contact.phone), has_linkedin_profile=bool(contact.linkedin_url), has_marketing_email_consent=consent)
@@ -212,18 +208,17 @@ def build_graphs(session_factory: sessionmaker, settings: Settings, checkpointer
             db.commit()
             return {"content_id": idea.id}
 
-    def compile_graph(state_type, nodes, edges):
+    def simple_graph(state_type, nodes, edges):
         builder = StateGraph(state_type)
         for name, node in nodes:
             builder.add_node(name, node)
-        builder.add_edge(START, edges[0][0])
         for source, target in edges:
-            if source != "START":
-                builder.add_edge(source, target)
+            builder.add_edge(START if source == "START" else source, END if target == "END" else target)
         return builder.compile(checkpointer=saver)
 
-    inbound = compile_graph(InboundState, [("prepare", inbound_prepare), ("persist", inbound_persist)], [("START", "prepare"), ("prepare", "persist"), ("persist", END)])
-    research = compile_graph(ResearchState, [("score", research_score), ("persist", research_persist)], [("START", "score"), ("score", "persist"), ("persist", END)])
-    outreach = compile_graph(OutreachState, [("policy_and_task", outreach_run)], [("START", "policy_and_task"), ("policy_and_task", END)])
-    content = compile_graph(ContentState, [("draft", content_draft), ("persist", content_save)], [("START", "draft"), ("draft", "persist"), ("persist", END)])
-    return {"inbound": inbound, "research": research, "outreach": outreach, "content": content}
+    return {
+        "inbound": simple_graph(InboundState, [("prepare", inbound_prepare), ("persist", inbound_persist)], [("START", "prepare"), ("prepare", "persist"), ("persist", "END")]),
+        "research": simple_graph(ResearchState, [("score", research_score), ("persist", research_persist)], [("START", "score"), ("score", "persist"), ("persist", "END")]),
+        "outreach": simple_graph(OutreachState, [("policy_and_task", outreach_run)], [("START", "policy_and_task"), ("policy_and_task", "END")]),
+        "content": simple_graph(ContentState, [("draft", content_draft), ("persist", content_save)], [("START", "draft"), ("draft", "persist"), ("persist", "END")]),
+    }

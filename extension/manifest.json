@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "GTM Delta Lap — Manuelle Kontaktaufnahme",
+  "version": "0.1.0",
+  "description": "Überträgt manuell eingegebene Account- und Kontaktdaten an das lokale GTM-Backend.",
+  "action": {
+    "default_title": "Kontakt manuell erfassen",
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
+  ]
+}

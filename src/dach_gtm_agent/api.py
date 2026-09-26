@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
 from .config import Settings
@@ -64,6 +66,15 @@ def create_app() -> FastAPI:
             database.dispose()
 
     app = FastAPI(title="GTM Delta Lap API", version="0.1.0", lifespan=lifespan)
+    extension_origin = os.getenv("CHROME_EXTENSION_ORIGIN", "").strip()
+    if extension_origin:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[extension_origin],
+            allow_methods=["GET", "POST"],
+            allow_headers=["Content-Type", "Idempotency-Key"],
+            allow_credentials=False,
+        )
 
     @app.get("/health")
     def health() -> dict[str, str]:

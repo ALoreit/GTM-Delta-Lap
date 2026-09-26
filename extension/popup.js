@@ -112,24 +112,20 @@ form.addEventListener("submit", async (event) => {
   submitButton.disabled = true;
   setStatus("Werte werden geprüft und gespeichert …");
   try {
-    const account = await postJson("/v1/research/accounts", {
+    const result = await postJson("/v1/import/linkedin-visible-profile", {
       company_name: data.company_name.trim(),
       domain: data.domain.trim(),
       industry: data.industry.trim() || null,
       employee_count: data.employee_count ? Number(data.employee_count) : null,
       country: "DACH",
-      signals: [],
-    });
-    const contact = await postJson(`/v1/accounts/${account.account_id}/contacts`, {
       name: data.name.trim(),
       role: data.role.trim() || null,
+      profile_location: data.location.trim() || null,
       email: data.email.trim() || null,
       phone: data.phone.trim() || null,
       linkedin_url: data.linkedin_url.trim(),
-      source_url: data.linkedin_url.trim(),
-      source_type: "manual_link",
     });
-    setStatus(`Nach Prüfung gespeichert. Kontakt-ID: ${contact.contact_id}`, "success");
+    setStatus(`Kontakt gespeichert und zur Prüfung vorgemerkt. Kontakt-ID: ${result.contact_id}`, "success");
   } catch (error) {
     setStatus(`Speichern fehlgeschlagen: ${error.message}`, "error");
   } finally {

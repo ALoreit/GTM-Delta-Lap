@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import datetime, timezone
+from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
@@ -9,12 +11,13 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from .models import Account, AuditEvent, Contact
-from .schemas import EvidenceSignal, ResearchRequest
+from .schemas import ResearchRequest
 
 router = APIRouter()
 
 
 class LinkedInVisibleProfileImport(BaseModel):
+    user_confirmed: Literal[True]
     company_name: str = Field(min_length=1, max_length=250)
     domain: str = Field(min_length=3, max_length=253)
     country: str = Field(default="DACH", min_length=2, max_length=8)
@@ -64,38 +67,30 @@ class LinkedInVisibleProfileImport(BaseModel):
 
 @router.post("/v1/import/linkedin-visible-profile")
 def import_visible_profile(payload: LinkedInVisibleProfileImport, request: Request):
-    """Persist user-reviewed profile fields and run the existing account research graph."""
+    """Persist fields the user reviewed in the extension and run account scoring."""
     account_request = ResearchRequest(
         company_name=payload.company_name,
         domain=payload.domain,
         country=payload.country,
         industry=payload.industry,
         employee_count=payload.employee_count,
-        signals=[EvidenceSignal(
-            signal_type="linkedin_visible_profile",
-            summary=f"Profile import reviewed by user for {payload.name} ({payload.role or 'role not supplied'}).",
-            evidence_url=payload.linkedin_url,
-            source_type="manual_link",
-            classification="fact",
-            confidence=0.7,
-            observed_at=datetime.now(timezone.utc),
-        )],
+        signals=[],
     )
     scored = request.app.state.graphs["research"].invoke(
         {"account": account_request.model_dump(mode="json")},
-        config={"configurable": {"thread_id": f"linkedin-import-{payload.linkedin_url.rsplit('/', 1)[-1]}"}},
+        config={"configurable": {"thread_id": str(uuid.uuid4())}},
     )
     account_id = scored.get("account_id")
     if not account_id:
         raise HTTPException(500, "Account research graph did not return an account")
 
     now = datetime.now(timezone.utc)
+    linkedin_url_normalized = payload.linkedin_url.strip().rstrip("/").casefold()
     with request.app.state.database.session_factory() as db:
         account = db.get(Account, account_id)
         if account is None:
             raise HTTPException(404, "Account not found after research")
 
-        linkedin_url_normalized = payload.linkedin_url.strip().rstrip("/").casefold()
         contact = db.scalar(
             select(Contact).where(
                 Contact.account_id == account_id,

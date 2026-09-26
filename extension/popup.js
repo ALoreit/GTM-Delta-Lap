@@ -24,19 +24,34 @@ function extractVisibleProfile(tabId) {
       target: { tabId },
       func: () => {
         const profileUrl = window.location.href;
-        if (!/linkedin\.com$/.test(location.hostname) || !location.pathname.startsWith("/in/")) {
+        const hostname = location.hostname.toLowerCase();
+        if (!(hostname === "linkedin.com" || hostname.endsWith(".linkedin.com"))
+          || !location.pathname.startsWith("/in/")) {
           return { error: "Bitte ein einzelnes LinkedIn-Mitgliedsprofil öffnen." };
         }
-        const visibleText = (selector) => {
-          const node = document.querySelector(selector);
-          if (!node || !node.getClientRects().length) return "";
-          return (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim();
+        const visibleText = (selectors) => {
+          for (const selector of selectors) {
+            const node = document.querySelector(selector);
+            if (!node || !node.getClientRects().length) continue;
+            const value = (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim();
+            if (value) return value;
+          }
+          return "";
         };
-        const name = visibleText("main h1");
-        const headline = visibleText("main .text-body-medium.break-words")
-          || visibleText("main [data-generated-suggestion-target]");
-        const location = visibleText("main .text-body-small.inline.t-black--light.break-words");
-        const company = visibleText("main .pv-text-details__right-panel-item-text");
+        const name = visibleText(["main h1"]);
+        const headline = visibleText([
+          "main .text-body-medium.break-words",
+          "main .pv-text-details__left-panel .text-body-medium",
+          "main [data-generated-suggestion-target]",
+        ]);
+        const location = visibleText([
+          "main .text-body-small.inline.t-black--light.break-words",
+          "main .pv-text-details__left-panel .text-body-small",
+        ]);
+        const company = visibleText([
+          "main .pv-text-details__right-panel-item-text",
+          "main .pv-text-details__left-panel .inline-show-more-text",
+        ]);
         return { profile_url: profileUrl, name, headline, location, company };
       }
     }, (results) => {
@@ -75,7 +90,7 @@ importButton.addEventListener("click", async () => {
     if (profile.headline) form.elements.role.value = profile.headline;
     if (profile.location) form.elements.location.value = profile.location;
     if (profile.company && !form.elements.company_name.value) form.elements.company_name.value = profile.company;
-    setStatus("Basisangaben übernommen. Bitte alle Werte prüfen und Firmenfelder ergänzen.", "success");
+    setStatus("Sichtbare Basisangaben übernommen. Bitte die Werte prüfen und Firmenfelder ergänzen.", "success");
   } catch (error) {
     setStatus(`Import fehlgeschlagen: ${error.message}`, "error");
   } finally {
@@ -113,6 +128,7 @@ form.addEventListener("submit", async (event) => {
   setStatus("Werte werden geprüft und gespeichert …");
   try {
     const result = await postJson("/v1/import/linkedin-visible-profile", {
+      user_confirmed: true,
       company_name: data.company_name.trim(),
       domain: data.domain.trim(),
       industry: data.industry.trim() || null,

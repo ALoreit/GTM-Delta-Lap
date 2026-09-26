@@ -29,30 +29,66 @@ function extractVisibleProfile(tabId) {
           || !location.pathname.startsWith("/in/")) {
           return { error: "Bitte ein einzelnes LinkedIn-Mitgliedsprofil öffnen." };
         }
-        const visibleText = (selectors) => {
+
+        const visible = (node) => {
+          if (!node || !node.getClientRects().length) return false;
+          const style = getComputedStyle(node);
+          return style.display !== "none" && style.visibility !== "hidden";
+        };
+        const text = (node) => (node?.innerText || "").replace(/\s+/g, " ").trim();
+        const firstVisibleText = (selectors) => {
           for (const selector of selectors) {
             const node = document.querySelector(selector);
-            if (!node || !node.getClientRects().length) continue;
-            const value = (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim();
-            if (value) return value;
+            if (visible(node) && text(node)) return text(node);
           }
           return "";
         };
-        const name = visibleText(["main h1"]);
-        const headline = visibleText([
-          "main .text-body-medium.break-words",
-          "main .pv-text-details__left-panel .text-body-medium",
-          "main [data-generated-suggestion-target]",
-        ]);
-        const location = visibleText([
-          "main .text-body-small.inline.t-black--light.break-words",
-          "main .pv-text-details__left-panel .text-body-small",
-        ]);
-        const company = visibleText([
+
+        const main = document.querySelector("main");
+        if (!main || !visible(main)) return { error: "Das Profil ist noch nicht vollständig geladen." };
+
+        const allowedHeadings = /^(about|über mich|info|experience|berufserfahrung|education|ausbildung|skills|kenntnisse|certifications|lizenzen|zertifikate|projects|projekte|publications|publikationen|volunteering|ehrenamt|honors|auszeichnungen|courses|kurse|languages|sprachen|patents|patente|organizations|organisationen|test scores|testergebnisse)$/i;
+        const excludedHeadings = /(people also viewed|people you may know|personen, die sie vielleicht kennen|weitere profile|similar profiles|ähnliche profile)/i;
+        const sections = Array.from(main.querySelectorAll("section"))
+          .filter(visible)
+          .map((section) => {
+            const headingNode = section.querySelector("h2");
+            const heading = text(headingNode).replace(/\s+(show all|alle anzeigen).*$/i, "").trim();
+            const body = text(section);
+            return { heading, text: body.slice(0, 6000) };
+          })
+          .filter((section) => section.heading && allowedHeadings.test(section.heading)
+            && !excludedHeadings.test(section.heading) && section.text)
+          .filter((section, index, all) => all.findIndex((item) => item.heading.toLowerCase() === section.heading.toLowerCase()) === index)
+          .slice(0, 20);
+
+        const experience = sections.find((section) => /^(experience|berufserfahrung)$/i.test(section.heading));
+        let company = firstVisibleText([
           "main .pv-text-details__right-panel-item-text",
-          "main .pv-text-details__left-panel .inline-show-more-text",
+          "main [data-field='experience_company_logo']",
         ]);
-        return { profile_url: profileUrl, name, headline, location, company };
+        if (!company && experience) {
+          const experienceSection = Array.from(main.querySelectorAll("section"))
+            .find((section) => visible(section) && text(section.querySelector("h2")) === experience.heading);
+          const firstRole = experienceSection?.querySelector("ul > li");
+          const organization = text(firstRole?.querySelector("h4"));
+          company = organization.split(/\s+[·|]\s+/)[0].trim();
+        }
+
+        return {
+          profile_url: profileUrl,
+          name: firstVisibleText(["main h1"]),
+          headline: firstVisibleText([
+            "main .text-body-medium.break-words",
+            "main .pv-text-details__left-panel .text-body-medium",
+          ]),
+          location: firstVisibleText([
+            "main .text-body-small.inline.t-black--light.break-words",
+            "main .pv-text-details__left-panel .text-body-small",
+          ]),
+          company,
+          profile_data: { sections },
+        };
       }
     }, (results) => {
       if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
@@ -73,7 +109,7 @@ function isLinkedInProfile(value) {
 
 importButton.addEventListener("click", async () => {
   importButton.disabled = true;
-  setStatus("Lese die im aktiven Profil sichtbaren Basisangaben …");
+  setStatus("Lese sichtbare Profilangaben …");
   try {
     const tab = await currentActiveTab();
     if (!tab?.id || !tab.url || !isLinkedInProfile(tab.url)) {
@@ -90,7 +126,9 @@ importButton.addEventListener("click", async () => {
     if (profile.headline) form.elements.role.value = profile.headline;
     if (profile.location) form.elements.location.value = profile.location;
     if (profile.company && !form.elements.company_name.value) form.elements.company_name.value = profile.company;
-    setStatus("Sichtbare Basisangaben übernommen. Bitte die Werte prüfen und Firmenfelder ergänzen.", "success");
+    form.elements.profile_data.value = JSON.stringify(profile.profile_data || { sections: [] }, null, 2);
+    const sectionCount = profile.profile_data?.sections?.length || 0;
+    setStatus(`Basisangaben und ${sectionCount} sichtbare Profilabschnitte übernommen. Bitte alles prüfen.`, "success");
   } catch (error) {
     setStatus(`Import fehlgeschlagen: ${error.message}`, "error");
   } finally {
@@ -124,8 +162,20 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  let profileData;
+  try {
+    profileData = JSON.parse(data.profile_data || "{\"sections\":[]}");
+  } catch {
+    setStatus("Die zusätzlichen Profildaten sind kein gültiges JSON. Bitte prüfen.", "error");
+    return;
+  }
+  if (!profileData || typeof profileData !== "object" || Array.isArray(profileData)) {
+    setStatus("Die zusätzlichen Profildaten müssen ein JSON-Objekt sein.", "error");
+    return;
+  }
+
   submitButton.disabled = true;
-  setStatus("Werte werden geprüft und gespeichert …");
+  setStatus("Geprüfte Werte werden gespeichert …");
   try {
     const result = await postJson("/v1/import/linkedin-visible-profile", {
       user_confirmed: true,
@@ -140,11 +190,3 @@ form.addEventListener("submit", async (event) => {
       email: data.email.trim() || null,
       phone: data.phone.trim() || null,
       linkedin_url: data.linkedin_url.trim(),
-    });
-    setStatus(`Kontakt gespeichert und zur Prüfung vorgemerkt. Kontakt-ID: ${result.contact_id}`, "success");
-  } catch (error) {
-    setStatus(`Speichern fehlgeschlagen: ${error.message}`, "error");
-  } finally {
-    submitButton.disabled = false;
-  }
-});

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kontakt erfassen</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">GTM DELTA LAP</p>
+      <h1>Kontakt erfassen</h1>
+      <p class="intro">Manuelle Übergabe an deine Review-Queue.</p>
+    </header>
+    <div class="notice" role="note">
+      Diese Erweiterung liest LinkedIn-Seiten nicht aus. Bitte erfasse nur Daten, die du geprüft hast und verwenden darfst.
+    </div>
+    <form id="capture-form">
+      <label>Firmenname<input name="company_name" required maxlength="250" autocomplete="organization"></label>
+      <label>Firmendomain<input name="domain" required maxlength="253" placeholder="beispiel.de" autocomplete="url"></label>
+      <label>Branche<input name="industry" maxlength="160" placeholder="B2B SaaS"></label>
+      <div class="divider"></div>
+      <label>Kontaktname<input name="name" required maxlength="200" autocomplete="name"></label>
+      <label>Rolle<input name="role" maxlength="200" autocomplete="organization-title"></label>
+      <label>LinkedIn-Profil-URL<input name="linkedin_url" type="url" required maxlength="500" placeholder="https://www.linkedin.com/in/…"></label>
+      <label>Geschäftliche E-Mail <span class="optional">optional</span><input name="email" type="email" maxlength="320" autocomplete="email"></label>
+      <label>Telefon <span class="optional">optional</span><input name="phone" type="tel" maxlength="80" autocomplete="tel"></label>
+      <button id="submit" type="submit">Account &amp; Kontakt speichern</button>
+    </form>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <p class="footnote">Kein Versand. E-Mail-Outreach bleibt ohne dokumentierte Einwilligung gesperrt. API-Ziel: lokales Backend auf localhost:8000.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,16 +1,33 @@
 # DACH GTM Agent — LangGraph MVP
 
-Kleines, erweiterbares Backend für die im Konzept beschriebenen DACH-B2B-SaaS-Abläufe. Es bildet **Inbound-Qualifizierung, Account-Research/Scoring, manuelle Outreach-Aufgaben und Content-Entwürfe** als getrennte LangGraph-Workflows ab.
+Kleines Backend für die DACH-B2B-SaaS-Abläufe aus dem Architekturkonzept. Es implementiert Inbound-Qualifizierung, Account-Research/Scoring, manuelle Outreach-Aufgaben und Content-Entwürfe als LangGraph-Workflows. Ein minimales Chrome-Extension-Popup übergibt **manuell bestätigte** Daten an die lokale API.
 
-## Sicherheitsgrenzen im MVP
+## LinkedIn-Grenze und Extension
 
-- Es gibt **keinen Versand von E-Mails**, keine automatisierten Anrufe und keine LinkedIn-Aktionen. Die API legt höchstens interne Review-Aufgaben an.
-- E-Mail-Aufgaben werden nur bei dokumentierter, aktiver Marketing-Einwilligung angelegt. Eine Anfrage über ein Formular gilt nicht selbst als Marketing-Einwilligung.
-- Telefon-Aufgaben sind immer als manuell markiert und erfordern eine gesonderte Einzelfallprüfung. Der Code entscheidet keine mutmaßliche Einwilligung.
-- LinkedIn-Aufgaben bleiben manuell. Es gibt keinen Scraper, Browserbot, Nachrichtenversand oder automatisches Liken/Kommentieren.
-- Recherche-Signale werden über die API angeliefert; es wird keine Website oder Plattform automatisiert ausgelesen. Fakten, Schlussfolgerungen, Quellen-URL und Vertrauensgrad bleiben getrennt.
-- Webseiten und Recherchetexte sind nicht als Anweisungen ausführbar: die MVP-Graphen rufen kein LLM mit solchen Texten auf.
-- Die Content-Erstellung ist derzeit ein konservatives, quellengebundenes Textgerüst aus vom Nutzer gelieferten Aussagen, kein freier KI-Fakten-Generator.
+Die Extension ist absichtlich **kein Apollo-Klon auf technischer Ebene**: Sie liest keine Profilfelder aus dem DOM, kopiert keine LinkedIn-Seitendaten und verwendet keine LinkedIn-Cookies. Nach einem ausdrücklichen Klick übernimmt sie höchstens die URL des aktiven Tabs. Name, Rolle, E-Mail und Telefon werden von der Nutzerin/dem Nutzer selbst eingetragen und vor dem Speichern geprüft. Die Daten landen mit der Profil-URL als Herkunft in der eigenen Datenbank.
+
+Das passt zur LinkedIn User Agreement: diese untersagt nicht autorisierte Browser-Plugins/andere Methoden zum Scrapen oder Kopieren von Profilen und Dienstdaten sowie nicht autorisierte Automatisierung für Kontakt- und Social-Aktionen ([LinkedIn User Agreement](https://www.linkedin.com/legal/user-agreement)). LinkedIn-API-Zugriff auf Member-Daten erfordert passende OAuth-Berechtigungen; viele Berechtigungen und Partnerprogramme müssen ausdrücklich freigeschaltet werden ([LinkedIn API access](https://learn.microsoft.com/en-us/linkedin/shared/authentication/getting-access)). Apollo beschreibt seine Extension als Zugang zu Apollo-Daten und Prospektionsfunktionen in LinkedIn; das erklärt die Produktfunktion, belegt aber nicht, dass eine beliebige Drittanbieter-Extension dieselbe Zugriffsmethode oder Berechtigung hat ([Apollo Extension Overview](https://knowledge.apollo.io/hc/en-us/articles/4409226637453-Apollo-Chrome-Extension-Overview)).
+
+Wenn GTM Delta Lap für euren Anwendungsfall von LinkedIn eine API-/Partnerfreigabe erhält, kann dafür ein OAuth-Provider-Adapter ergänzt werden. Bis dahin bietet diese Extension manuelle URL-Übernahme und Dateneingabe. Sie versendet keine Nachrichten.
+
+### Extension lokal laden
+
+1. API starten und erreichbar halten unter `http://127.0.0.1:8000`.
+2. In Chrome `chrome://extensions` öffnen und den Entwicklermodus einschalten.
+3. „Entpackte Erweiterung laden“ wählen und den Ordner `extension/` auswählen.
+4. LinkedIn-Profil selbst öffnen, Extension anklicken, „Aktive LinkedIn-Profil-URL übernehmen“ drücken.
+5. Account/Kontaktfelder selbst prüfen und ergänzen, dann ausdrücklich speichern.
+
+Die Extension hat `activeTab` und Host-Zugriff nur auf den lokalen GTM-Backend-Port. Sie führt auf LinkedIn kein Content-Script aus. Für automatische Profilfeld-Extraktion ist sie bewusst nicht ausgelegt.
+
+## Weitere Sicherheitsgrenzen
+
+- Kein Versand von E-Mails, keine automatisierten Anrufe und keine automatischen LinkedIn-Aktionen. Es werden höchstens interne Review-Aufgaben angelegt.
+- E-Mail-Aufgaben werden nur bei dokumentierter, aktiver Marketing-Einwilligung angelegt. Ein Formular-Request allein gilt nicht als Marketing-Einwilligung.
+- Telefon-Aufgaben bleiben manuell und erfordern Einzelfallprüfung; der Code entscheidet keine mutmaßliche Einwilligung.
+- Recherche-Signale kommen aus Team-Eingaben oder autorisierten Providern. Es wird keine Website oder Plattform automatisch gecrawlt.
+- Fakten und Schlussfolgerungen, Quellen-URL, Beobachtungsdatum und Vertrauensgrad sind getrennt.
+- Es ist derzeit kein LLM eingebunden. Content-Entwürfe sind ein Quellen-gebundenes Textgerüst aus vom Nutzer gelieferten Aussagen, kein freier KI-Fakten-Generator.
 
 Das sind technische Schutzvorkehrungen, keine Rechtsberatung. UWG-/Datenschutzprüfung und Anpassung an den konkreten Prozess bleiben erforderlich.
 
@@ -18,7 +35,8 @@ Das sind technische Schutzvorkehrungen, keine Rechtsberatung. UWG-/Datenschutzpr
 
 ```mermaid
 flowchart LR
-  A[FastAPI] --> I[Inbound LangGraph]
+  X[Chrome: manuelle Eingabe + URL] --> A[FastAPI]
+  A --> I[Inbound LangGraph]
   A --> R[Research + ICP Score LangGraph]
   A --> O[Outreach-Policy-Gate LangGraph]
   A --> C[Content-Draft LangGraph]
@@ -27,85 +45,50 @@ flowchart LR
   O --> DB
   C --> DB
   DB --> Q[Review-API]
-  G[LangGraph Checkpointer] -. dev: Memory / prod: PostgreSQL .-> I
 ```
 
-Der ICP-Score ist nachvollziehbar und konfigurierbar, aber bewusst kein autonomer Kontaktentscheid. Ohne konkrete ICP-Größenkriterien bleiben Größenwerte neutral/unbegrenzt.
+Der ICP-Score ist nachvollziehbar und konfigurierbar, aber kein autonomer Kontaktentscheid. Ohne konkrete ICP-Größenkriterien bleiben Größenwerte neutral/unbegrenzt.
 
-## Starten
+## Backend starten
 
-Voraussetzungen: Python 3.11+, Abhängigkeiten aus `pyproject.toml` und optional Docker Compose für PostgreSQL.
+Voraussetzungen: Python 3.11+, Abhängigkeiten aus `pyproject.toml`, optional Docker Compose für PostgreSQL.
 
-1. Projekt-Abhängigkeiten mit dem bevorzugten Python-Paketmanager aus `pyproject.toml` einrichten.
-2. `.env.example` nach `.env` kopieren und ICP-Grenzen sowie Datenbank-URL prüfen.
-3. Lokal mit SQLite und In-Memory-Checkpoints starten:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[test]"
+cp .env.example .env
+uvicorn dach_gtm_agent.api:app --app-dir src --reload --env-file .env
+```
 
-   ```bash
-   uvicorn dach_gtm_agent.api:app --app-dir src --reload --env-file .env
-   ```
+Interaktive API-Dokumentation: `http://127.0.0.1:8000/docs`.
 
-   Interaktive API-Dokumentation: `http://127.0.0.1:8000/docs`.
-
-Für PostgreSQL in der Entwicklung kann `docker compose up -d postgres` gestartet und in `.env` `DATABASE_URL` sowie `GRAPH_CHECKPOINT_BACKEND=postgres` und `CHECKPOINT_DATABASE_URL` gesetzt werden. SQLite/In-Memory eignet sich nur für lokale Entwicklung. PostgreSQL-Checkpoints speichern den Workflow-Zustand dauerhaft; sie enthalten je nach Workflow auch Eingabedaten. Zugriffe, Verschlüsselung, Löschfristen und Aufbewahrung müssen deshalb mindestens so streng wie für die Lead-Datenbank geregelt werden.
+Für PostgreSQL in der Entwicklung: `docker compose up -d postgres`; anschließend `DATABASE_URL`, `GRAPH_CHECKPOINT_BACKEND=postgres` und `CHECKPOINT_DATABASE_URL` in `.env` setzen. SQLite/In-Memory ist nur für lokale Entwicklung. PostgreSQL-Checkpoints speichern Workflow-Zustände dauerhaft; diese können Eingabedaten enthalten und benötigen passende Zugriffs-, Verschlüsselungs- und Löschfristen.
 
 ## API-Überblick
 
-### Inbound
-
-`POST /v1/inbound` nimmt Formular-Anfragen an. `Idempotency-Key` als Header verhindert doppelte Verarbeitung bei Wiederholungen. Marketing-Einwilligung ist standardmäßig `false`; falls sie `true` ist, sind exakter Checkbox-Text, Textversion und Erfassungszeitpunkt Pflichtfelder. Der Graph qualifiziert heuristisch und erzeugt eine **interne** Review-Aufgabe.
-
-```json
-{
-  "company_name": "Beispiel GmbH",
-  "company_domain": "https://www.beispiel.de",
-  "country": "DE",
-  "industry": "B2B SaaS",
-  "contact_name": "Mara Beispiel",
-  "contact_email": "mara@beispiel.de",
-  "contact_role": "VP Sales",
-  "request_text": "Wir suchen eine Lösung und möchten eine Demo vereinbaren.",
-  "form_source": "website_demo_form",
-  "marketing_consent": false
-}
-```
-
-### Account-Research und erklärbares Scoring
-
-`POST /v1/research/accounts` erwartet Accounts und Belege aus Team-Eingaben oder autorisierten Providern. Pro Signal: Typ, Zusammenfassung, Quell-URL, `fact`/`inference`, Vertrauensgrad und Beobachtungszeit. `GET /v1/accounts/{account_id}` liefert gespeicherte Belege und Teilwerte. Ein Review-Task wird unabhängig vom Score angelegt.
-
-Konfigurationsvariablen: `ICP_TARGET_INDUSTRIES`, `ICP_MIN_EMPLOYEES`, `ICP_MAX_EMPLOYEES`, `ICP_SIGNAL_MAX_AGE_DAYS`.
-
-### Kontaktpflege und Outreach-Aufgaben
-
-- `POST /v1/accounts/{account_id}/contacts`: Kontakt aus einer angegebenen Quelle anlegen. Eine Quelle ist Pflicht.
-- `POST /v1/outreach/tasks`: gewünschten Kanal, Begründung, Quell-URL und optionalen Entwurf übergeben.
-- `POST /v1/contacts/{contact_id}/suppress`: Kontakt kanalübergreifend sperren.
+- `POST /v1/inbound`: Formularanfrage deduplizieren, heuristisch qualifizieren, interne Review-Aufgabe erzeugen. `Idempotency-Key` schützt vor Duplikaten bei Wiederholungen. Einwilligung erfordert exakten Checkbox-Text, Version und Zeitstempel.
+- `POST /v1/research/accounts`: Account und belegte Signale erfassen/scoren.
+- `GET /v1/accounts/{account_id}`: Accountscore und Belege lesen.
+- `POST /v1/accounts/{account_id}/contacts`: manuell oder aus einer autorisierten Quelle stammenden Kontakt erfassen; Herkunfts-URL ist Pflicht.
+- `POST /v1/outreach/tasks`: kanalgeprüfte manuelle Aufgabe erstellen. E-Mail nur mit aktiver dokumentierter Einwilligung; Telefon mit zusätzlicher Rechtsprüfung; LinkedIn nur manuell.
+- `POST /v1/contacts/{contact_id}/suppress`: kanalübergreifende Sperre.
 - `POST /v1/contacts/{contact_id}/email-consent/revoke`: Marketing-E-Mail-Einwilligung widerrufen.
-- `POST /v1/review/{activity_id}`: Aufgabe freigeben, bearbeiten, zurückstellen oder „nicht kontaktieren“ markieren.
-- `GET /v1/review`: Review-Queue lesen.
+- `GET /v1/review` und `POST /v1/review/{activity_id}`: Review-Queue und manuelle Freigabe/Bearbeitung.
+- `POST /v1/content/ideas`, `GET /v1/content/ideas`, `POST /v1/content/ideas/{content_id}/review`: Content-Entwurf, Review und Freigabe. Auch nach Freigabe wird nichts veröffentlicht.
 
-Eine Freigabe markiert nur die Aufgabe als freigegeben; sie löst **keine** externe Aktion aus. Eine aktive Sperre blockiert alle Kanäle. Für E-Mail muss ein aktiver Permission-Datensatz vorhanden sein; Telefon bleibt mit `requires_legal_review=true` gesondert prüfpflichtig.
+Eine Freigabe markiert nur die Aufgabe als freigegeben; sie löst keine externe Aktion aus. Eine aktive Sperre blockiert neue Aufgaben über alle Kanäle.
 
-### Content Intelligence
+## Datenmodell und Tests
 
-`POST /v1/content/ideas` erzeugt aus Thema, Zielgruppe, vom Autor bereitgestellter Kernaussage, Diskussionsfrage und Quellen ein Review-pflichtiges Textgerüst. `GET /v1/content/ideas` zeigt Entwürfe; `POST /v1/content/ideas/{content_id}/review` kann sie freigeben, bearbeiten oder ablehnen. Auch nach Freigabe wird nichts veröffentlicht.
+Tabellen: `accounts`, `contacts`, `signals`, `permissions`, `leads`, `activities`, `suppression`, `content_ideas`, `audit_events`. Produktivbetrieb braucht versionierte Datenbankmigrationen, Authentifizierung/Rollen, Rate-Limits, Löschjobs und eine definierte Aufbewahrungsfrist je personenbezogenem Feld. Audit-Payloads sind knapp gehalten; Secrets gehören nicht in Requests, Prompts oder Logs.
 
-## Datenmodell
+Tests liegen unter `tests/`; ausführen mit `pytest`.
 
-Enthaltene Tabellen: `accounts`, `contacts`, `signals`, `permissions`, `leads`, `activities`, `suppression`, `content_ideas`, `audit_events`. Für einen produktiven Betrieb sollte `create_all` durch versionierte Datenbankmigrationen ersetzt und eine Lösch-/Prüffrist je personenbezogenem Feld festgelegt werden. Audit-Payloads sind absichtlich knapp; keine Secrets in Requests, Prompts oder Logs ablegen.
+## Nächste Erweiterungen
 
-## Tests
-
-Unit-Tests liegen unter `tests/`. Mit installierter Test-Extra-Abhängigkeit ausführen:
-
-```bash
-pytest
-```
-
-## Nächste sinnvolle Erweiterungen
-
-1. Migrationen (Alembic), Authentifizierung/Rollen und Rate-Limits ergänzen.
-2. Provider-Adapter für zugelassene Websuche/Enrichment anbinden und jeden Provider-Aufruf auditieren.
-3. LLM-Adapter für Zusammenfassung und Entwürfe hinzufügen; nur mit strukturierten Quellen, Fakten-/Inferenztrennung, Prompt-Injection-Abwehr und menschlicher Freigabe.
-4. Review-Oberfläche, Benachrichtigungen, Löschjobs und Checkpoint-Retention ergänzen.
-5. Prozess im kleinen Testsegment messen, bevor Datenvolumen oder Automatisierung erweitert werden.
+1. Alembic-Migrationen, Authentifizierung/Rollen und Rate-Limits.
+2. Adapter zu explizit zugelassenen Websuche-/Enrichment-Providern.
+3. Bei erteilter Freigabe: LinkedIn OAuth-Adapter nur für die genehmigten Scopes und Datenfelder.
+4. Review-Oberfläche, Benachrichtigungen, Löschjobs und Checkpoint-Retention.
+5. Kleine Pilotkohorte messen, bevor Volumen oder Automatisierung erweitert werden.

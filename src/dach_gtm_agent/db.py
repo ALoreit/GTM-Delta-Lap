@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from .models import Base
@@ -18,6 +18,11 @@ class Database:
 
     def create_tables(self) -> None:
         Base.metadata.create_all(self.engine)
+        # Additive compatibility migration for databases created before profile import.
+        columns = {column["name"] for column in inspect(self.engine).get_columns("contacts")}
+        if "profile_location" not in columns:
+            with self.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE contacts ADD COLUMN profile_location VARCHAR(200)"))
 
     def dispose(self) -> None:
         self.engine.dispose()

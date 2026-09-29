@@ -99,11 +99,12 @@ class ResearchRequest(BaseModel):
 class ContactCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     role: str | None = Field(default=None, max_length=200)
+    profile_location: str | None = Field(default=None, max_length=200)
     email: str | None = Field(default=None, max_length=320)
     phone: str | None = Field(default=None, max_length=80)
     linkedin_url: str | None = Field(default=None, max_length=500)
     source_url: str = Field(min_length=8, max_length=2000)
-    source_type: Literal["public_web", "team_provided", "authorized_provider", "manual_link"] = "team_provided"
+    source_type: Literal["public_web", "team_provided", "authorized_provider", "manual_link", "linkedin_visible_profile"] = "team_provided"
 
     @field_validator("email")
     @classmethod

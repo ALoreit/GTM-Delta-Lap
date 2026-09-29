@@ -1,58 +1,42 @@
 # DACH GTM Agent — LangGraph MVP
 
-Kleines Backend für die DACH-B2B-SaaS-Abläufe aus dem Architekturkonzept. Es implementiert Inbound-Qualifizierung, Account-Research/Scoring, manuelle Outreach-Aufgaben und Content-Entwürfe als LangGraph-Workflows. Ein minimales Chrome-Extension-Popup übergibt **manuell bestätigte** Daten an die lokale API.
+FastAPI/LangGraph backend und Chrome-Erweiterung für manuell gestartete GTM-Workflows: Inbound-Qualifizierung, Account-Research/Scoring, manuelle Outreach-Aufgaben und Content-Entwürfe.
 
-## LinkedIn-Grenze und Extension
+## LinkedIn-Profilimport
 
-Die Extension ist absichtlich **kein Apollo-Klon auf technischer Ebene**: Sie liest keine Profilfelder aus dem DOM, kopiert keine LinkedIn-Seitendaten und verwendet keine LinkedIn-Cookies. Nach einem ausdrücklichen Klick übernimmt sie höchstens die URL des aktiven Tabs. Name, Rolle, E-Mail und Telefon werden von der Nutzerin/dem Nutzer selbst eingetragen und vor dem Speichern geprüft. Die Daten landen mit der Profil-URL als Herkunft in der eigenen Datenbank.
+Nach einem ausdrücklichen Klick auf **„Sichtbares LinkedIn-Profil übernehmen“** liest die Erweiterung ausgewählte, aktuell sichtbare Basisangaben aus dem aktiven einzelnen Profil: Profil-URL, Name, Profilheadline, Standort und – sofern das aktuelle Layout sie in den ausgewählten sichtbaren Bereichen enthält – den Firmennamen. Die Werte werden erst nach Prüfung und Bestätigung des Formulars ans Backend gesendet.
 
-Das passt zur LinkedIn User Agreement: diese untersagt nicht autorisierte Browser-Plugins/andere Methoden zum Scrapen oder Kopieren von Profilen und Dienstdaten sowie nicht autorisierte Automatisierung für Kontakt- und Social-Aktionen ([LinkedIn User Agreement](https://www.linkedin.com/legal/user-agreement)). LinkedIn-API-Zugriff auf Member-Daten erfordert passende OAuth-Berechtigungen; viele Berechtigungen und Partnerprogramme müssen ausdrücklich freigeschaltet werden ([LinkedIn API access](https://learn.microsoft.com/en-us/linkedin/shared/authentication/getting-access)). Apollo beschreibt seine Extension als Zugang zu Apollo-Daten und Prospektionsfunktionen in LinkedIn; das belegt nicht, dass eine beliebige Drittanbieter-Extension dieselbe Zugriffsmethode oder Berechtigung hat ([Apollo Extension Overview](https://knowledge.apollo.io/hc/en-us/articles/4409226637453-Apollo-Chrome-Extension-Overview)).
+Die DOM-Auswahl hängt von LinkedIns veränderlicher Seitendarstellung ab. Angaben können leer bleiben oder nach UI-Änderungen angepasst werden müssen. Es werden keine nicht sichtbaren Profilbereiche geöffnet, keine Hintergrundnavigation ausgeführt und keine privaten Endpunkte oder LinkedIn-Cookies verwendet.
 
-Wenn GTM Delta Lap für euren Anwendungsfall eine LinkedIn-API-/Partnerfreigabe erhält, kann dafür ein OAuth-Provider-Adapter ergänzt werden. Bis dahin bietet diese Extension manuelle URL-Übernahme und Dateneingabe. Sie versendet keine Nachrichten.
+Firmendomain, Branche, Mitarbeiterzahl, geschäftliche E-Mail und Telefon werden nicht automatisch angereichert. Sie müssen ergänzt oder über einen separat konfigurierten und zugelassenen Datenprovider beschafft werden. Diese Version enthält noch keinen Enrichment-Provider-Adapter.
 
-### Extension lokal laden
+Der Backend-Endpunkt `POST /v1/import/linkedin-visible-profile` validiert die Profil-URL, verlangt `user_confirmed: true`, führt das vorhandene Account-Scoring aus, erstellt bzw. aktualisiert den Kontakt und protokolliert Profil-URL, Importquelle und Bestätigung im Audit-Log. Der Kontakt wird anhand der Profil-URL, ersatzweise geschäftlicher E-Mail, innerhalb des Accounts dedupliziert.
 
-1. API starten und erreichbar halten unter `http://127.0.0.1:8000`.
-2. In Chrome `chrome://extensions` öffnen und Entwicklermodus einschalten.
-3. „Entpackte Erweiterung laden“ wählen und den Ordner `extension/` auswählen.
-4. Die angezeigte Extension-ID als `CHROME_EXTENSION_ORIGIN=chrome-extension://<extension-id>` in `.env` eintragen und die API neu starten. CORS wird nur für diesen exakten Ursprung geöffnet.
-5. LinkedIn-Profil selbst öffnen, Extension anklicken, „Aktive LinkedIn-Profil-URL übernehmen“ drücken.
-6. Account/Kontaktfelder selbst prüfen und ergänzen, dann ausdrücklich speichern.
+Es gibt keinen Versand und keine automatisierten LinkedIn-Aktionen. Die Implementierung ist keine Rechtsberatung und prüft oder erzeugt keine Freigaben; der Betreiber ist für die Freigaben und den Einsatz verantwortlich.
 
-Die Extension hat `activeTab` und Host-Zugriff nur auf den lokalen GTM-Backend-Port. Sie führt auf LinkedIn kein Content-Script aus. Für automatische Profilfeld-Extraktion ist sie bewusst nicht ausgelegt.
+### Chrome-Erweiterung einrichten
 
-## Weitere Sicherheitsgrenzen
+1. Backend lokal unter `http://127.0.0.1:8000` starten.
+2. `chrome://extensions` öffnen, Entwicklermodus aktivieren und den Ordner `extension/` entpackt laden.
+3. Die Erweiterungs-ID als `CHROME_EXTENSION_ORIGIN=chrome-extension://<extension-id>` in `.env` setzen und die API neu starten.
+4. Ein einzelnes LinkedIn-Profil öffnen, Erweiterung starten und **„Sichtbares LinkedIn-Profil übernehmen“** klicken.
+5. Werte prüfen und fehlende Firmenfelder ergänzen; danach **„Prüfen & speichern“** klicken.
 
-- Kein Versand von E-Mails, keine automatisierten Anrufe und keine automatischen LinkedIn-Aktionen. Es werden höchstens interne Review-Aufgaben angelegt.
-- E-Mail-Aufgaben werden nur bei dokumentierter, aktiver Marketing-Einwilligung angelegt. Ein Formular-Request allein gilt nicht als Marketing-Einwilligung.
-- Telefon-Aufgaben bleiben manuell und erfordern Einzelfallprüfung; der Code entscheidet keine mutmaßliche Einwilligung.
-- Recherche-Signale kommen aus Team-Eingaben oder autorisierten Providern. Es wird keine Website oder Plattform automatisch gecrawlt.
-- Fakten und Schlussfolgerungen, Quellen-URL, Beobachtungsdatum und Vertrauensgrad sind getrennt.
-- Es ist derzeit kein LLM eingebunden. Content-Entwürfe sind ein quellengebundenes Textgerüst aus vom Nutzer gelieferten Aussagen, kein freier KI-Fakten-Generator.
+Die Chrome-Berechtigungen sind `activeTab` und `scripting`, plus Zugriff auf das lokale Backend. Das Skript wird erst auf Nutzerklick in den aktiven Tab injiziert.
 
-Das sind technische Schutzvorkehrungen, keine Rechtsberatung. UWG-/Datenschutzprüfung und Anpassung an den konkreten Prozess bleiben erforderlich.
+## Weitere API-Funktionen
 
-## Ablauf und Komponenten
-
-```mermaid
-flowchart LR
-  X[Chrome: manuelle Eingabe + URL] --> A[FastAPI]
-  A --> I[Inbound LangGraph]
-  A --> R[Research + ICP Score LangGraph]
-  A --> O[Outreach-Policy-Gate LangGraph]
-  A --> C[Content-Draft LangGraph]
-  I --> DB[(SQLAlchemy: SQLite lokal / PostgreSQL empfohlen)]
-  R --> DB
-  O --> DB
-  C --> DB
-  DB --> Q[Review-API]
-```
-
-Der ICP-Score ist nachvollziehbar und konfigurierbar, aber kein autonomer Kontaktentscheid. Ohne konkrete ICP-Größenkriterien bleiben Größenwerte neutral/unbegrenzt.
+- `POST /v1/inbound`: Formularanfrage deduplizieren, heuristisch qualifizieren und interne Review-Aufgabe erzeugen.
+- `POST /v1/research/accounts`: Account und belegte Signale erfassen/scoren.
+- `GET /v1/accounts/{account_id}`: Accountscore und Belege lesen.
+- `POST /v1/accounts/{account_id}/contacts`: Kontakt manuell bzw. aus einer zugelassenen Quelle erfassen.
+- `POST /v1/outreach/tasks`: kanalgeprüfte manuelle Review-Aufgabe erstellen; kein Versand.
+- `GET /v1/review` und `POST /v1/review/{activity_id}`: Review-Queue und manuelle Entscheidung.
+- Weitere Endpunkte: Suppression, Einwilligungswiderruf und Content-Review; siehe `/docs`.
 
 ## Backend starten
 
-Voraussetzungen: Python 3.11+, Abhängigkeiten aus `pyproject.toml`, optional Docker Compose für PostgreSQL.
+Voraussetzungen: Python 3.11+, Abhängigkeiten aus `pyproject.toml`; optional Docker Compose für PostgreSQL.
 
 ```bash
 python -m venv .venv
@@ -64,32 +48,8 @@ uvicorn dach_gtm_agent.api:app --app-dir src --reload --env-file .env
 
 Interaktive API-Dokumentation: `http://127.0.0.1:8000/docs`.
 
-Für PostgreSQL in der Entwicklung: `docker compose up -d postgres`; anschließend `DATABASE_URL`, `GRAPH_CHECKPOINT_BACKEND=postgres` und `CHECKPOINT_DATABASE_URL` in `.env` setzen. SQLite/In-Memory ist nur für lokale Entwicklung. PostgreSQL-Checkpoints speichern Workflow-Zustände dauerhaft; diese können Eingabedaten enthalten und benötigen passende Zugriffs-, Verschlüsselungs- und Löschfristen.
+## Grenzen vor Produktivbetrieb
 
-## API-Überblick
+Die API ist im MVP nicht authentifiziert; CORS ist kein Authentifizierungsmechanismus. Backend nicht ungeschützt im Internet bereitstellen. Vor einem Produktivbetrieb sind mindestens Authentifizierung/Rollen, HTTPS, Rate-Limits, Datenminimierung, Löschfristen, versionierte Migrationen, Datenschutzprüfung und End-to-End-Tests erforderlich. `Database.create_tables()` enthält eine additive Migration für die neue Standortspalte in lokalen Bestandsdatenbanken.
 
-- `POST /v1/inbound`: Formularanfrage deduplizieren, heuristisch qualifizieren, interne Review-Aufgabe erzeugen. `Idempotency-Key` schützt vor Duplikaten bei Wiederholungen. Einwilligung erfordert exakten Checkbox-Text, Version und Zeitstempel.
-- `POST /v1/research/accounts`: Account und belegte Signale erfassen/scoren.
-- `GET /v1/accounts/{account_id}`: Accountscore und Belege lesen.
-- `POST /v1/accounts/{account_id}/contacts`: manuell oder aus einer autorisierten Quelle stammenden Kontakt erfassen; Herkunfts-URL ist Pflicht.
-- `POST /v1/outreach/tasks`: kanalgeprüfte manuelle Aufgabe erstellen. E-Mail nur mit aktiver dokumentierter Einwilligung; Telefon mit zusätzlicher Rechtsprüfung; LinkedIn nur manuell.
-- `POST /v1/contacts/{contact_id}/suppress`: kanalübergreifende Sperre.
-- `POST /v1/contacts/{contact_id}/email-consent/revoke`: Marketing-E-Mail-Einwilligung widerrufen.
-- `GET /v1/review` und `POST /v1/review/{activity_id}`: Review-Queue und manuelle Freigabe/Bearbeitung.
-- `POST /v1/content/ideas`, `GET /v1/content/ideas`, `POST /v1/content/ideas/{content_id}/review`: Content-Entwurf, Review und Freigabe. Auch nach Freigabe wird nichts veröffentlicht.
-
-Eine Freigabe markiert nur die Aufgabe als freigegeben; sie löst keine externe Aktion aus. Eine aktive Sperre blockiert neue Aufgaben über alle Kanäle.
-
-## Datenmodell und Tests
-
-Tabellen: `accounts`, `contacts`, `signals`, `permissions`, `leads`, `activities`, `suppression`, `content_ideas`, `audit_events`. Produktivbetrieb braucht versionierte Datenbankmigrationen, Authentifizierung/Rollen, Rate-Limits, Löschjobs und eine definierte Aufbewahrungsfrist je personenbezogenem Feld. Audit-Payloads sind knapp gehalten; Secrets gehören nicht in Requests, Prompts oder Logs.
-
-Tests liegen unter `tests/`; ausführen mit `pytest`.
-
-## Nächste Erweiterungen
-
-1. Alembic-Migrationen, Authentifizierung/Rollen und Rate-Limits.
-2. Adapter zu explizit zugelassenen Websuche-/Enrichment-Providern.
-3. Bei erteilter Freigabe: LinkedIn OAuth-Adapter nur für die genehmigten Scopes und Datenfelder.
-4. Review-Oberfläche, Benachrichtigungen, Löschjobs und Checkpoint-Retention.
-5. Kleine Pilotkohorte messen, bevor Volumen oder Automatisierung erweitert werden.
+Tests: `pytest`.

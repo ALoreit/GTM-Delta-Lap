@@ -15,6 +15,7 @@ from .db import Database
 from .graphs import build_graphs
 from .models import Account, Activity, AuditEvent, Contact, ContentIdea, Permission, Signal, Suppression
 from .schemas import ContentIdeaRequest, ContentReviewRequest, ContactCreate, InboundSubmission, OutreachTaskRequest, ResearchRequest, ReviewRequest
+from .linkedin_import import router as linkedin_import_router
 
 
 def _thread_config() -> dict[str, Any]:
@@ -112,11 +113,12 @@ def create_app() -> FastAPI:
             if data.get("email"):
                 contact = db.scalar(select(Contact).where(Contact.account_id == account_id, Contact.email_normalized == data["email"]))
             if contact is None:
-                contact = Contact(account_id=account_id, name=data["name"], role=data.get("role"), email=data.get("email"), email_normalized=data.get("email"), phone=data.get("phone"), linkedin_url=data.get("linkedin_url"), source_url=data["source_url"], source_type=data["source_type"], last_verified_at=datetime.now(timezone.utc))
+                contact = Contact(account_id=account_id, name=data["name"], role=data.get("role"), profile_location=data.get("profile_location"), email=data.get("email"), email_normalized=data.get("email"), phone=data.get("phone"), linkedin_url=data.get("linkedin_url"), source_url=data["source_url"], source_type=data["source_type"], last_verified_at=datetime.now(timezone.utc))
                 db.add(contact)
             else:
                 contact.name = data["name"]
                 contact.role = data.get("role") or contact.role
+                contact.profile_location = data.get("profile_location") or contact.profile_location
                 contact.phone = data.get("phone") or contact.phone
                 contact.linkedin_url = data.get("linkedin_url") or contact.linkedin_url
                 contact.source_url = data["source_url"]
@@ -218,3 +220,4 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+app.include_router(linkedin_import_router)

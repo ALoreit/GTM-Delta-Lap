@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "GTM Delta Lap — Manuelle Kontaktaufnahme",
-  "version": "0.1.0",
-  "description": "Manuelle Erfassung bestätigter Account- und Kontaktdaten für das lokale GTM-Backend.",
-  "permissions": ["activeTab"],
+  "name": "GTM Delta Lap - Kontaktimport",
+  "version": "0.2.0",
+  "description": "Importiert nach ausdruecklichem Klick sichtbare LinkedIn-Profildaten in das GTM-Backend.",
+  "permissions": ["activeTab", "scripting"],
   "action": {
-    "default_title": "Kontakt manuell erfassen",
+    "default_title": "LinkedIn-Kontakt importieren",
     "default_popup": "popup.html"
   },
   "host_permissions": [

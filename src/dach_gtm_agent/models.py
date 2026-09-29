@@ -46,6 +46,7 @@ class Contact(Base):
     account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     role: Mapped[str | None] = mapped_column(String(200))
+    profile_location: Mapped[str | None] = mapped_column(String(200))
     email: Mapped[str | None] = mapped_column(String(320))
     email_normalized: Mapped[str | None] = mapped_column(String(320), index=True)
     phone: Mapped[str | None] = mapped_column(String(80))

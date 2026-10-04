@@ -23,6 +23,7 @@ function extractVisibleProfile(tabId) {
     chrome.scripting.executeScript({
       target: { tabId },
       func: () => {
+        try {
         const profileUrl = window.location.href;
         const hostname = location.hostname.toLowerCase();
         if (!(hostname === "linkedin.com" || hostname.endsWith(".linkedin.com"))
@@ -33,23 +34,51 @@ function extractVisibleProfile(tabId) {
         const visible = (node) => {
           if (!node || !node.getClientRects().length) return false;
           const style = getComputedStyle(node);
-          return style.display !== "none" && style.visibility !== "hidden";
+          return style.display !== "none"
+            && style.visibility !== "hidden"
+            && style.opacity !== "0";
         };
-        const text = (node) => (node?.innerText || "").replace(/\s+/g, " ").trim();
+        const text = (node) => (node?.innerText || node?.textContent || "").replace(/\s+/g, " ").trim();
         const firstVisibleText = (selectors) => {
           for (const selector of selectors) {
-            const node = document.querySelector(selector);
-            if (visible(node) && text(node)) return text(node);
+            for (const node of document.querySelectorAll(selector)) {
+              if (visible(node) && text(node)) return text(node);
+            }
           }
           return "";
         };
+        const readContactEmail = () => {
+          const dialogRoots = Array.from(document.querySelectorAll("[role='dialog'], .artdeco-modal"))
+            .filter(visible);
+          const contactOverlay = /\/overlay\/contact-info\/?$/i.test(location.pathname);
+          const roots = dialogRoots.length ? dialogRoots : contactOverlay ? [document.body] : [];
+          const mailto = roots.flatMap((root) => Array.from(root.querySelectorAll("a[href^='mailto:']")))
+            .find((node) => visible(node));
+          if (mailto) return decodeURIComponent(mailto.href.replace(/^mailto:/i, "").split("?")[0]);
+          const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+          for (const root of roots) {
+            const match = text(root).match(emailPattern);
+            if (match) return match[0];
+          }
+          return "";
+        };
+        const closeContactDialog = () => {
+          const closeButton = Array.from(document.querySelectorAll(
+            "[role='dialog'] button, .artdeco-modal button, button",
+          )).find((node) => visible(node) && (
+            /close|schließen/i.test(node.getAttribute("aria-label") || "")
+            || /^(close|schließen)$/i.test(text(node))
+            || node.classList.contains("artdeco-modal__dismiss")
+          ));
+          closeButton?.click();
+        };
 
         const main = document.querySelector("main");
-        if (!main || !visible(main)) return { error: "Das Profil ist noch nicht vollständig geladen." };
+        const content = main && visible(main) ? main : document;
 
-        const allowedHeadings = /^(about|über mich|info|experience|berufserfahrung|education|ausbildung|skills|kenntnisse|certifications|lizenzen|zertifikate|projects|projekte|publications|publikationen|volunteering|ehrenamt|honors|auszeichnungen|courses|kurse|languages|sprachen|patents|patente|organizations|organisationen|test scores|testergebnisse)$/i;
+        const allowedHeadings = /^(about|über mich|info|experience|erfahrung|berufserfahrung|education|ausbildung|skills|kenntnisse|certifications|lizenzen|zertifikate|projects|projekte|publications|publikationen|volunteering|ehrenamt|honors|auszeichnungen|courses|kurse|languages|sprachen|patents|patente|organizations|organisationen|test scores|testergebnisse)$/i;
         const excludedHeadings = /(people also viewed|people you may know|personen, die sie vielleicht kennen|weitere profile|similar profiles|ähnliche profile)/i;
-        const sections = Array.from(main.querySelectorAll("section"))
+        const sections = Array.from(content.querySelectorAll("section"))
           .filter(visible)
           .map((section) => {
             const headingNode = section.querySelector("h2");
@@ -62,33 +91,73 @@ function extractVisibleProfile(tabId) {
           .filter((section, index, all) => all.findIndex((item) => item.heading.toLowerCase() === section.heading.toLowerCase()) === index)
           .slice(0, 20);
 
-        const experience = sections.find((section) => /^(experience|berufserfahrung)$/i.test(section.heading));
-        let company = firstVisibleText([
-          "main .pv-text-details__right-panel-item-text",
-          "main [data-field='experience_company_logo']",
-        ]);
-        if (!company && experience) {
-          const experienceSection = Array.from(main.querySelectorAll("section"))
-            .find((section) => visible(section) && text(section.querySelector("h2")) === experience.heading);
-          const firstRole = experienceSection?.querySelector("ul > li");
-          const organization = text(firstRole?.querySelector("h4"));
-          company = organization.split(/\s+[·|]\s+/)[0].trim();
+        const profileHeading = main?.querySelector("h1")
+          || Array.from(content.querySelectorAll("h1, h2")).find(visible);
+        const profileHeader = profileHeading?.closest("section") || content;
+        const name = text(profileHeading) || firstVisibleText(["main h1", "h1"]);
+        const headerParagraphs = Array.from(profileHeader.querySelectorAll("p"))
+          .filter((node) => visible(node) && text(node) && text(node) !== name)
+          .map(text);
+        const headerHeadline = headerParagraphs
+          .find((value) => !/Kontaktinformationen|Kontakte|Metropolregion|He\/Him|Sie\/Ihr|^·\s*\d+\.?$/i.test(value)) || "";
+        const headlineSegments = headerHeadline.split(/\s*\|\s*/).map((value) => value.trim()).filter(Boolean);
+        const fallbackPosition = headlineSegments.length === 2 ? headlineSegments[1] : "";
+        const fallbackCompany = fallbackPosition.match(/@\s*(.+)$/)?.[1]?.trim() || "";
+        const headerLocation = headerParagraphs
+          .find((value) => /Metropolregion|\b[A-ZÄÖÜ][^,]+,\s*[A-ZÄÖÜ]/i.test(value)
+            && !/Kontaktinformationen|Contact information|He\/Him|Sie\/Ihr/i.test(value)) || "";
+        const experienceSection = Array.from(content.querySelectorAll("section"))
+          .find((section) => visible(section)
+            && /^(experience|erfahrung|berufserfahrung)$/i.test(
+              text(section.querySelector("h2")).replace(/\s+(show all|alle anzeigen).*$/i, "").trim(),
+            ));
+        const firstExperienceLink = Array.from(experienceSection?.querySelectorAll("a[href*='/company/']") || [])
+          .find((node) => visible(node) && text(node))
+          || experienceSection?.querySelector("ul > li");
+        const experienceLinkLines = (firstExperienceLink?.innerText || "")
+          .split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+        const isDuration = (value) => /\b(year|years|month|months|jahr|jahre|monat|monate)\b/i.test(value);
+        let experienceRole = "";
+        let experienceCompany = "";
+        if (experienceLinkLines.length >= 2) {
+          experienceCompany = experienceLinkLines[1].split(/\s+[·|]\s+/)[0].trim();
+          experienceRole = experienceLinkLines[0];
+          if (isDuration(experienceLinkLines[1])) {
+            experienceCompany = experienceLinkLines[0];
+            const sectionLines = (experienceSection?.innerText || "")
+              .split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+            const companyIndex = sectionLines.findIndex((line) => line === experienceCompany);
+            experienceRole = companyIndex >= 0 && isDuration(sectionLines[companyIndex + 1] || "")
+              ? sectionLines[companyIndex + 2] || "" : "";
+          }
         }
+        const headline = experienceRole || fallbackPosition;
+        const company = experienceCompany || fallbackCompany;
+        const companyKey = company.split("(")[0].trim().toLowerCase();
+        const companySlug = companyKey.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const matchingCompanyLink = Array.from(content.querySelectorAll("a[href*='/company/']"))
+          .find((node) => visible(node) && ((companyKey && text(node).toLowerCase().includes(companyKey))
+            || (companySlug && node.href.toLowerCase().includes(`/company/${companySlug}`))));
+        const companyUrl = firstExperienceLink?.href || matchingCompanyLink?.href || "";
+        const email = readContactEmail();
+        const profileLocation = firstVisibleText([
+          "main .text-body-small.inline.t-black--light.break-words",
+          "main .pv-text-details__left-panel .text-body-small",
+        ]) || headerLocation;
 
         return {
           profile_url: profileUrl,
-          name: firstVisibleText(["main h1"]),
-          headline: firstVisibleText([
-            "main .text-body-medium.break-words",
-            "main .pv-text-details__left-panel .text-body-medium",
-          ]),
-          location: firstVisibleText([
-            "main .text-body-small.inline.t-black--light.break-words",
-            "main .pv-text-details__left-panel .text-body-small",
-          ]),
+          name,
+          headline,
+          location: profileLocation,
           company,
+          company_url: companyUrl,
+          email,
           profile_data: { sections },
         };
+        } catch (error) {
+          return { error: `LinkedIn-Seitenskript: ${error?.message || error}` };
+        }
       }
     }, (results) => {
       if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
@@ -122,13 +191,13 @@ importButton.addEventListener("click", async () => {
       return;
     }
     form.elements.linkedin_url.value = profile.profile_url || tab.url;
+    if (profile.company_url && !form.elements.domain.value) form.elements.domain.value = profile.company_url;
     if (profile.name) form.elements.name.value = profile.name;
     if (profile.headline) form.elements.role.value = profile.headline;
     if (profile.location) form.elements.location.value = profile.location;
     if (profile.company && !form.elements.company_name.value) form.elements.company_name.value = profile.company;
-    form.elements.profile_data.value = JSON.stringify(profile.profile_data || { sections: [] }, null, 2);
-    const sectionCount = profile.profile_data?.sections?.length || 0;
-    setStatus(`Basisangaben und ${sectionCount} sichtbare Profilabschnitte übernommen. Bitte alles prüfen.`, "success");
+    if (profile.email) form.elements.email.value = profile.email;
+    setStatus("Sichtbare Profilangaben übernommen. Bitte alles prüfen.", "success");
   } catch (error) {
     setStatus(`Import fehlgeschlagen: ${error.message}`, "error");
   } finally {
@@ -162,18 +231,6 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  let profileData;
-  try {
-    profileData = JSON.parse(data.profile_data || "{\"sections\":[]}");
-  } catch {
-    setStatus("Die zusätzlichen Profildaten sind kein gültiges JSON. Bitte prüfen.", "error");
-    return;
-  }
-  if (!profileData || typeof profileData !== "object" || Array.isArray(profileData)) {
-    setStatus("Die zusätzlichen Profildaten müssen ein JSON-Objekt sein.", "error");
-    return;
-  }
-
   submitButton.disabled = true;
   setStatus("Geprüfte Werte werden gespeichert …");
   try {
@@ -190,3 +247,11 @@ form.addEventListener("submit", async (event) => {
       email: data.email.trim() || null,
       phone: data.phone.trim() || null,
       linkedin_url: data.linkedin_url.trim(),
+    });
+    setStatus(`Gespeichert. Review-Aufgabe ${result.review_activity_id || "erstellt"}.`, "success");
+  } catch (error) {
+    setStatus(`Speichern fehlgeschlagen: ${error.message}`, "error");
+  } finally {
+    submitButton.disabled = false;
+  }
+});

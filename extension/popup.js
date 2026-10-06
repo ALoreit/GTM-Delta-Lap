@@ -62,6 +62,40 @@ function extractVisibleProfile(tabId) {
           }
           return "";
         };
+        const readContactPhone = () => {
+          const dialogRoots = Array.from(document.querySelectorAll("[role='dialog'], .artdeco-modal"))
+            .filter(visible);
+          const contactOverlay = /\/overlay\/contact-info\/?$/i.test(location.pathname);
+          const roots = dialogRoots.length ? dialogRoots : contactOverlay ? [document.body] : [];
+          const tel = roots.flatMap((root) => Array.from(root.querySelectorAll("a[href^='tel:']")))
+            .find((node) => visible(node));
+          if (tel) return decodeURIComponent(tel.href.replace(/^tel:/i, "").split("?")[0]).trim();
+          const phonePattern = /\+\d{1,3}(?:[\s().-]*\d){6,}/;
+          for (const root of roots) {
+            const match = text(root).match(phonePattern);
+            if (match) return match[0].trim();
+          }
+          return "";
+        };
+        const readContactWebsite = () => {
+          const dialogRoots = Array.from(document.querySelectorAll("[role='dialog'], .artdeco-modal"))
+            .filter(visible);
+          const contactOverlay = /\/overlay\/contact-info\/?$/i.test(location.pathname);
+          const roots = dialogRoots.length ? dialogRoots : contactOverlay ? [document.body] : [];
+          const website = roots.flatMap((root) => Array.from(root.querySelectorAll("a[href]")))
+            .find((node) => visible(node)
+              && !/^mailto:|^tel:/i.test(node.href)
+              && /\.[a-z]{2,}(?:\/|$)/i.test(text(node)));
+          return website?.href || "";
+        };
+        const readProfileWebsite = () => {
+          const website = Array.from(profileHeader.querySelectorAll("a[href]"))
+            .find((node) => visible(node)
+              && /^https?:/i.test(node.href)
+              && !/linkedin\.com/i.test(node.href)
+              && !/^mailto:|^tel:/i.test(node.href));
+          return website?.href || "";
+        };
         const closeContactDialog = () => {
           const closeButton = Array.from(document.querySelectorAll(
             "[role='dialog'] button, .artdeco-modal button, button",
@@ -95,14 +129,27 @@ function extractVisibleProfile(tabId) {
           || Array.from(content.querySelectorAll("h1, h2")).find(visible);
         const profileHeader = profileHeading?.closest("section") || content;
         const name = text(profileHeading) || firstVisibleText(["main h1", "h1"]);
+        const normalizedProfileUrl = profileUrl.replace(/\/overlay\/contact-info\/?$/i, "/");
         const headerParagraphs = Array.from(profileHeader.querySelectorAll("p"))
           .filter((node) => visible(node) && text(node) && text(node) !== name)
           .map(text);
-        const headerHeadline = headerParagraphs
-          .find((value) => !/Kontaktinformationen|Kontakte|Metropolregion|He\/Him|Sie\/Ihr|^·\s*\d+\.?$/i.test(value)) || "";
+        const headlineCandidates = headerParagraphs
+          .filter((value) => !/Kontaktinformationen|Kontakte|Metropolregion|He\/Him|Sie\/Ihr|^·\s*\d+\.?$/i.test(value));
+        const roleMarker = /\b(founder|co-founder|gründer|ceo|cto|cfo|owner|inhaber|director|manager|engineer|berater|consultant)\b/i;
+        const headerHeadline = headlineCandidates.find((value) => value.includes("|"))
+          || (headlineCandidates[1] && roleMarker.test(headlineCandidates[1])
+            ? `${headlineCandidates[0]} | ${headlineCandidates[1]}`
+            : headlineCandidates[0]) || "";
         const headlineSegments = headerHeadline.split(/\s*\|\s*/).map((value) => value.trim()).filter(Boolean);
-        const fallbackPosition = headlineSegments.length === 2 ? headlineSegments[1] : "";
-        const fallbackCompany = fallbackPosition.match(/@\s*(.+)$/)?.[1]?.trim() || "";
+        const firstHeadlineSegment = headlineSegments[0] || "";
+        const firstSegmentLooksLikeRole = /^(entrepreneur|founder|co-founder|gründer|ceo|cto|cfo|owner|inhaber|director|manager|engineer|berater|consultant)\b/i.test(firstHeadlineSegment);
+        const fallbackPosition = headlineSegments.length >= 2
+          ? (firstSegmentLooksLikeRole ? firstHeadlineSegment : headlineSegments[1])
+          : "";
+        const fallbackCompany = firstSegmentLooksLikeRole
+          ? headlineSegments[1] || ""
+          : fallbackPosition.match(/@\s*(.+)$/)?.[1]?.trim() || "";
+        const headlineCompany = headerHeadline.match(/\b(?:of|at|bei|@)\s+([^|]+)/i)?.[1]?.trim() || "";
         const headerLocation = headerParagraphs
           .find((value) => /Metropolregion|\b[A-ZÄÖÜ][^,]+,\s*[A-ZÄÖÜ]/i.test(value)
             && !/Kontaktinformationen|Contact information|He\/Him|Sie\/Ihr/i.test(value)) || "";
@@ -132,7 +179,7 @@ function extractVisibleProfile(tabId) {
           }
         }
         const headline = experienceRole || fallbackPosition;
-        const company = experienceCompany || fallbackCompany;
+        const company = experienceCompany || fallbackCompany || headlineCompany;
         const companyKey = company.split("(")[0].trim().toLowerCase();
         const companySlug = companyKey.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
         const matchingCompanyLink = Array.from(content.querySelectorAll("a[href*='/company/']"))
@@ -140,19 +187,23 @@ function extractVisibleProfile(tabId) {
             || (companySlug && node.href.toLowerCase().includes(`/company/${companySlug}`))));
         const companyUrl = firstExperienceLink?.href || matchingCompanyLink?.href || "";
         const email = readContactEmail();
+        const phone = readContactPhone();
+        const contactWebsite = readContactWebsite();
+        const profileWebsite = readProfileWebsite();
         const profileLocation = firstVisibleText([
           "main .text-body-small.inline.t-black--light.break-words",
           "main .pv-text-details__left-panel .text-body-small",
         ]) || headerLocation;
 
         return {
-          profile_url: profileUrl,
+          profile_url: normalizedProfileUrl,
           name,
           headline,
           location: profileLocation,
           company,
-          company_url: companyUrl,
+          company_url: companyUrl || contactWebsite || profileWebsite,
           email,
+          phone,
           profile_data: { sections },
         };
         } catch (error) {
@@ -197,6 +248,7 @@ importButton.addEventListener("click", async () => {
     if (profile.location) form.elements.location.value = profile.location;
     if (profile.company && !form.elements.company_name.value) form.elements.company_name.value = profile.company;
     if (profile.email) form.elements.email.value = profile.email;
+    if (profile.phone) form.elements.phone.value = profile.phone;
     setStatus("Sichtbare Profilangaben übernommen. Bitte alles prüfen.", "success");
   } catch (error) {
     setStatus(`Import fehlgeschlagen: ${error.message}`, "error");

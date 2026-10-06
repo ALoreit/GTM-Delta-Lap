@@ -53,7 +53,29 @@ class Contact(Base):
     linkedin_url: Mapped[str | None] = mapped_column(String(500))
     source_url: Mapped[str | None] = mapped_column(String(2000))
     source_type: Mapped[str] = mapped_column(String(40), default="inbound_form", nullable=False)
+    linkedin_connected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ContactNote(Base):
+    __tablename__ = "contact_notes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    contact_id: Mapped[str] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"), index=True, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class PlannedAction(Base):
+    __tablename__ = "planned_actions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    contact_id: Mapped[str] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"), index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    details: Mapped[str | None] = mapped_column(Text)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), default="planned", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

@@ -1,6 +1,6 @@
-# DACH GTM Agent — LangGraph MVP
+# DACH GTM Backend
 
-FastAPI/LangGraph backend und Chrome-Erweiterung für manuell gestartete GTM-Workflows: Inbound-Qualifizierung, Account-Research/Scoring, manuelle Outreach-Aufgaben und Content-Entwürfe.
+FastAPI-Backend und Chrome-Erweiterung für manuell gestartete GTM-Workflows: Inbound-Qualifizierung, Account-Research/Scoring, manuelle Outreach-Aufgaben und Content-Entwürfe. Agenten laufen in separaten Repositories und kommunizieren ausschließlich über die REST-API.
 
 ## LinkedIn-Profilimport
 
@@ -24,11 +24,16 @@ Es gibt keinen Versand und keine automatisierten LinkedIn-Aktionen. Die Implemen
 
 Die Chrome-Berechtigungen sind `activeTab` und `scripting`, plus Zugriff auf das lokale Backend. Das Skript wird erst auf Nutzerklick in den aktiven Tab injiziert.
 
+Eine LinkedIn-Company-URL kann als Fallback-Firmenschlüssel verwendet werden. Der Pfad bleibt dabei erhalten, zum Beispiel `linkedin.com/company/beispiel`, damit verschiedene LinkedIn-Unternehmensseiten nicht unter dem gemeinsamen Host `linkedin.com` zusammenfallen.
+
 ## Weitere API-Funktionen
 
+- Web-Frontend unter `http://127.0.0.1:8000/`: Kontakte nach Firma, Name und Position öffnen, die Übersicht direkt an den Spalten wie in Excel filtern und nach Firma, Name oder Hinzugefügt-Datum sortieren, vollständige Kontakt- und Firmeninformationen inklusive fehlender Werte ansehen und bearbeiten, LinkedIn-Vernetzungsstatus direkt in der Tabelle pflegen, Notizen schreiben und Aktionen planen.
 - `POST /v1/inbound`: Formularanfrage deduplizieren, heuristisch qualifizieren und interne Review-Aufgabe erzeugen.
 - `POST /v1/research/accounts`: Account und belegte Signale erfassen/scoren.
 - `GET /v1/accounts/{account_id}`: Accountscore und Belege lesen.
+- `GET /v1/agent/contacts?linkedin_connected=true|false`: Agenten-Read-only-Liste mit ID, Name, Firmenname und LinkedIn-Verbindungsstatus; E-Mail und Telefon werden nicht zurückgegeben.
+- `GET /v1/agent/contacts/{name}`: Agenten-Read-only-Kontaktkontext ohne E-Mail und Telefon. Der Name muss eindeutig sein; bei doppelten Namen wird `409 Conflict` zurückgegeben.
 - `POST /v1/accounts/{account_id}/contacts`: Kontakt manuell bzw. aus einer zugelassenen Quelle erfassen.
 - `POST /v1/outreach/tasks`: kanalgeprüfte manuelle Review-Aufgabe erstellen; kein Versand.
 - `GET /v1/review` und `POST /v1/review/{activity_id}`: Review-Queue und manuelle Entscheidung.
@@ -47,6 +52,10 @@ uvicorn dach_gtm_agent.api:app --app-dir src --reload --env-file .env
 ```
 
 Interaktive API-Dokumentation: `http://127.0.0.1:8000/docs`.
+
+## Agenten-Integration
+
+Dieses Repository enthält keinen LLM-Agenten und keine Agenten-Orchestrierung. Externe Agenten greifen weder direkt auf die Datenbank noch auf Python-Module zu, sondern verwenden ausschließlich die REST-API. Die `/v1/agent/*`-Routen sind dafür vorgesehene Read-only-Schnittstellen; Authentifizierung und Scopes müssen vor einem Produktiveinsatz ergänzt werden.
 
 ## Grenzen vor Produktivbetrieb
 

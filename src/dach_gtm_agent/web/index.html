@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GTM Delta Lap · Kontakte</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <div>
+        <p class="eyebrow">GTM DELTA LAP</p>
+        <h1>Kontakte</h1>
+        <p class="muted">Kontakte ansehen, Notizen festhalten und nächste Aktionen planen.</p>
+      </div>
+      <button id="refresh" class="button ghost" type="button">Aktualisieren</button>
+    </header>
+    <section id="list-view" class="panel">
+      <div class="toolbar">
+        <label class="search">Suchen<input id="search" type="search" placeholder="Name, Firma oder Position"></label>
+        <div class="toolbar-controls">
+          <button id="sort-added" class="sort-button" type="button" aria-label="Nach Hinzugefügt-Datum sortieren">Hinzugefügt <span aria-hidden="true">↓</span></button>
+          <span id="count" class="muted"></span>
+        </div>
+      </div>
+      <p id="list-status" class="status" role="status"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th><button class="column-sort" data-sort="company" type="button">Firma <span aria-hidden="true">↑</span></button></th>
+              <th><button class="column-sort" data-sort="name" type="button">Name <span aria-hidden="true">↑</span></button></th>
+              <th>Position</th>
+              <th>LinkedIn vernetzt</th>
+            </tr>
+          </thead>
+          <tbody id="contact-rows"></tbody>
+        </table>
+      </div>
+    </section>
+    <section id="detail-view" class="panel hidden">
+      <button id="back" class="back" type="button">← Zur Kontaktliste</button>
+      <div id="contact-detail"></div>
+      <section class="edit-section">
+        <div class="section-heading"><h2>Daten bearbeiten</h2><span id="edit-status" class="status" role="status"></span></div>
+        <form id="edit-form" class="edit-grid">
+          <fieldset><legend>Kontakt</legend>
+            <label>Name<input id="edit-name" required maxlength="200"></label>
+            <label>Position<input id="edit-role" maxlength="200"></label>
+            <label>Standort<input id="edit-location" maxlength="200"></label>
+            <label>E-Mail<input id="edit-email" type="email" maxlength="320"></label>
+            <label>Telefon<input id="edit-phone" type="tel" maxlength="80"></label>
+            <label>LinkedIn-URL<input id="edit-linkedin-url" type="url" maxlength="500"></label>
+            <label class="checkbox-label"><input id="edit-linkedin-connected" type="checkbox"> Auf LinkedIn vernetzt</label>
+          </fieldset>
+          <fieldset><legend>Firma</legend>
+            <label>Firmenname<input id="edit-company-name" required maxlength="250"></label>
+            <label>Domain<input id="edit-domain" required maxlength="253"></label>
+            <label>Branche<input id="edit-industry" maxlength="160"></label>
+            <label>Mitarbeitende<input id="edit-employee-count" type="number" min="0" max="10000000"></label>
+            <label>Land/Region<input id="edit-country" required maxlength="8"></label>
+          </fieldset>
+          <button class="button" type="submit">Änderungen speichern</button>
+        </form>
+      </section>
+      <div class="columns">
+        <section>
+          <h2>Notizen</h2>
+          <form id="note-form" class="card-form">
+            <label>Neue Notiz<textarea id="note-body" required maxlength="10000" rows="4" placeholder="Was ist wichtig?"></textarea></label>
+            <button class="button" type="submit">Notiz speichern</button>
+          </form>
+          <div id="notes"></div>
+        </section>
+        <section>
+          <h2>Aktionen</h2>
+          <form id="action-form" class="card-form">
+            <label>Titel<input id="action-title" required maxlength="200" placeholder="Zum Beispiel: Follow-up anrufen"></label>
+            <label>Details <span class="optional">optional</span><textarea id="action-details" maxlength="10000" rows="3"></textarea></label>
+            <label>Fällig am <span class="optional">optional</span><input id="action-due" type="datetime-local"></label>
+            <button class="button" type="submit">Aktion planen</button>
+          </form>
+          <div id="actions"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

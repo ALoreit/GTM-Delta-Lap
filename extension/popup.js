@@ -242,7 +242,9 @@ importButton.addEventListener("click", async () => {
       return;
     }
     form.elements.linkedin_url.value = profile.profile_url || tab.url;
-    if (profile.company_url && !form.elements.domain.value) form.elements.domain.value = profile.company_url;
+    if (profile.company_url && !form.elements.domain.value) {
+      form.elements.domain.value = profile.company_url;
+    }
     if (profile.name) form.elements.name.value = profile.name;
     if (profile.headline) form.elements.role.value = profile.headline;
     if (profile.location) form.elements.location.value = profile.location;

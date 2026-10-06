@@ -21,6 +21,19 @@ def _validate_http_url(value: str | None) -> str | None:
     return value
 
 
+def _normalize_company_domain(value: str) -> str:
+    parsed = urlsplit(value.strip() if "://" in value else f"//{value.strip()}")
+    if not parsed.hostname or "." not in parsed.hostname:
+        raise ValueError("domain must contain a host name")
+    hostname = parsed.hostname.casefold().removeprefix("www.")
+    if hostname == "linkedin.com" or hostname.endswith(".linkedin.com"):
+        path = parsed.path.rstrip("/")
+        if not path:
+            raise ValueError("LinkedIn company URL must include its company path")
+        return f"linkedin.com{path.casefold()}"
+    return hostname
+
+
 class InboundSubmission(BaseModel):
     company_name: str = Field(min_length=1, max_length=250)
     company_domain: str = Field(min_length=3, max_length=253)
@@ -90,10 +103,7 @@ class ResearchRequest(BaseModel):
     @field_validator("domain")
     @classmethod
     def validate_domain(cls, value: str) -> str:
-        parsed = urlsplit(value.strip() if "://" in value else f"//{value.strip()}")
-        if not parsed.hostname or "." not in parsed.hostname:
-            raise ValueError("domain must contain a host name")
-        return value.strip()
+        return _normalize_company_domain(value)
 
 
 class ContactCreate(BaseModel):
@@ -103,6 +113,7 @@ class ContactCreate(BaseModel):
     email: str | None = Field(default=None, max_length=320)
     phone: str | None = Field(default=None, max_length=80)
     linkedin_url: str | None = Field(default=None, max_length=500)
+    linkedin_connected: bool = False
     source_url: str = Field(min_length=8, max_length=2000)
     source_type: Literal["public_web", "team_provided", "authorized_provider", "manual_link", "linkedin_visible_profile"] = "team_provided"
 
@@ -126,6 +137,51 @@ class ContactCreate(BaseModel):
         if not any((self.email, self.phone, self.linkedin_url)):
             raise ValueError("provide at least one contact method")
         return self
+
+
+class ContactNoteCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=10000)
+
+
+class ContactUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    role: str | None = Field(default=None, max_length=200)
+    profile_location: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, max_length=320)
+    phone: str | None = Field(default=None, max_length=80)
+    linkedin_url: str | None = Field(default=None, max_length=500)
+    linkedin_connected: bool = False
+    company_name: str = Field(min_length=1, max_length=250)
+    domain: str = Field(min_length=3, max_length=253)
+    industry: str | None = Field(default=None, max_length=160)
+    employee_count: int | None = Field(default=None, ge=0, le=10_000_000)
+    country: str = Field(default="DACH", min_length=2, max_length=8)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        normalized = value.strip().casefold()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", normalized):
+            raise ValueError("email must be a valid email address")
+        return normalized
+
+    @field_validator("linkedin_url")
+    @classmethod
+    def validate_linkedin_url(cls, value: str | None) -> str | None:
+        return _validate_http_url(value)
+
+    @field_validator("domain")
+    @classmethod
+    def validate_domain(cls, value: str) -> str:
+        return _normalize_company_domain(value)
+
+
+class PlannedActionCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    details: str | None = Field(default=None, max_length=10000)
+    due_at: datetime | None = None
 
 
 class OutreachTaskRequest(BaseModel):

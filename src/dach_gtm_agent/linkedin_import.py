@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import uuid
 from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
@@ -12,6 +11,7 @@ from sqlalchemy import select
 
 from .models import Account, AuditEvent, Contact
 from .schemas import ResearchRequest
+from .services import research_account
 
 router = APIRouter()
 
@@ -36,7 +36,13 @@ class LinkedInVisibleProfileImport(BaseModel):
         parsed = urlsplit(value.strip() if "://" in value else f"//{value.strip()}")
         if not parsed.hostname or "." not in parsed.hostname:
             raise ValueError("domain must contain a host name")
-        return parsed.hostname.casefold().removeprefix("www.")
+        hostname = parsed.hostname.casefold().removeprefix("www.")
+        if hostname == "linkedin.com" or hostname.endswith(".linkedin.com"):
+            path = parsed.path.rstrip("/")
+            if not path:
+                raise ValueError("LinkedIn company URL must include its company path")
+            return f"linkedin.com{path.casefold()}"
+        return hostname
 
     @field_validator("linkedin_url")
     @classmethod
@@ -76,9 +82,10 @@ def import_visible_profile(payload: LinkedInVisibleProfileImport, request: Reque
         employee_count=payload.employee_count,
         signals=[],
     )
-    scored = request.app.state.graphs["research"].invoke(
-        {"account": account_request.model_dump(mode="json")},
-        config={"configurable": {"thread_id": str(uuid.uuid4())}},
+    scored = research_account(
+        request.app.state.database.session_factory,
+        request.app.state.settings,
+        account_request.model_dump(mode="json"),
     )
     account_id = scored.get("account_id")
     if not account_id:

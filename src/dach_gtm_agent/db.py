@@ -23,6 +23,9 @@ class Database:
         if "profile_location" not in columns:
             with self.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE contacts ADD COLUMN profile_location VARCHAR(200)"))
+        if "linkedin_connected" not in columns:
+            with self.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE contacts ADD COLUMN linkedin_connected BOOLEAN NOT NULL DEFAULT 0"))
 
     def dispose(self) -> None:
         self.engine.dispose()

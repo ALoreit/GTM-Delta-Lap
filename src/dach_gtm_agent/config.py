@@ -12,8 +12,6 @@ def _optional_int(name: str) -> int | None:
 @dataclass(frozen=True)
 class Settings:
     database_url: str
-    checkpoint_backend: str
-    checkpoint_database_url: str | None
     chrome_extension_origin: str | None
     target_industries: tuple[str, ...]
     min_employees: int | None
@@ -30,19 +28,9 @@ class Settings:
             ).split(",")
             if item.strip()
         )
-        backend = os.getenv("GRAPH_CHECKPOINT_BACKEND", "memory").strip().casefold()
-        if backend not in {"memory", "postgres"}:
-            raise ValueError("GRAPH_CHECKPOINT_BACKEND must be 'memory' or 'postgres'")
-        checkpoint_url = os.getenv("CHECKPOINT_DATABASE_URL", "").strip() or None
-        if backend == "postgres" and not checkpoint_url:
-            raise ValueError(
-                "CHECKPOINT_DATABASE_URL is required when GRAPH_CHECKPOINT_BACKEND=postgres"
-            )
         extension_origin = os.getenv("CHROME_EXTENSION_ORIGIN", "").strip() or None
         return cls(
             database_url=os.getenv("DATABASE_URL", "sqlite:///./gtm.db"),
-            checkpoint_backend=backend,
-            checkpoint_database_url=checkpoint_url,
             chrome_extension_origin=extension_origin,
             target_industries=industries,
             min_employees=_optional_int("ICP_MIN_EMPLOYEES"),
